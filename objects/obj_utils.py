@@ -1,11 +1,11 @@
 from abc import abstractmethod
-from .settings import Settings
+from .settings import settings
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.PublicKey import RSA
 from Crypto.Random import random
 
-SHA = Settings.SHA
-RSA_BIT_LENGTH = 2 * Settings.SIG_SEC_LEVEL
+SHA = settings.SHA
+RSA_BIT_LENGTH = 2 * settings.SIG_SEC_LEVEL
 
 
 class Serializable:
@@ -54,6 +54,7 @@ class Headerable:
         try:
             assert self.verify_header(), 'Instantiated header and calculated header are different.'
         except Exception:
+            print('Failed to finalize Headerable')
             self.finalized = False
 
     @staticmethod
@@ -84,6 +85,7 @@ class Signable(Headerable):
         try:
             assert self.verify(), 'Block contains invalid signature.'
         except Exception:
+            print('Failed to finalize Signable')
             self.finalized = False
 
     def verify(self):

@@ -1,6 +1,6 @@
 from network import *
 from threading import Thread, Lock
-from queue import Queue
+from queue import Queue, PriorityQueue
 from blockdag import *
 import time
 
@@ -18,28 +18,28 @@ class Client(Thread):
         self.device = Device()
         self.device_message = Message(port=self.broadcast_port, data=self.device.serializes().encode('utf-8'), annotation=Message.DEVICE)
         broadcaster.broadcast(self.device_message)
-        self.unprocessed = []
+        self.unprocessed = PriorityQueue()
 
     def run(self):
         last_timestamp = time.time()
         while not self._shutdown:
             curr_timestamp = time.time()
-            # Create a new block every 1000 ms
-            if curr_timestamp - last_timestamp > 1:
+            # Create a new block every 100 ms
+            if curr_timestamp - last_timestamp > 0.1:
                 last_timestamp = curr_timestamp
                 msgs = []
                 with self.q_lock:
                     while not self.msg_q.empty():
                         msgs.append(self.msg_q.get())
-                msgs = list(sorted(msgs, key=lambda msg: msg.annotation))
+                device_msgs = [msg for msg in msgs if msg.annotation == Message.DEVICE]
+                msgs = [msg for msg in msgs if msg.annotation == Message.BLOCK]
+                for device_msg in device_msgs:
+                    if Device.deserializes(device_msg.data.decode('utf-8')).is_new:
+                        broadcaster.broadcast(self.device_message)
                 for msg in msgs:
-                    if msg.annotation == Message.BLOCK:
-                        print(Block.deserializes(msg.data.decode('utf-8')))
-                    elif msg.annotation == Message.DEVICE:
-                        if Device.deserializes(msg.data.decode('utf-8')).is_new:
-                            broadcaster.broadcast(self.device_message)
+                    print(Block.deserializes(msg.data.decode('utf-8')))
                 leaves = set(global_state.get_leaves())
-                state = State(nonce=sum([block.state.nonce for block in leaves])+1)
+                state = State(nonce=(sum([block.state.nonce for block in leaves]) / len(leaves) if len(leaves) != 0 else 0) + 1)
                 block = Block(self.device, state, parent_blocks=leaves)
                 message = Message(port=self.broadcast_port, data=block.serializes().encode('utf-8'), annotation=Message.BLOCK)
                 print(block)
